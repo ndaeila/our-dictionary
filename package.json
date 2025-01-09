@@ -1,0 +1,29 @@
+{
+  "name": "our-dictionary",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:frontend": "npm run start --workspace=frontend",
+    "start:backend": "npm run dev --workspace=backend",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "test:watch": "npm run test:watch --workspaces",
+    "install:all": "npm install && npm install --workspace=frontend && npm install --workspace=backend"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^6.3.1",
+    "lucide-react": "^0.469.0",
+    "react-router-dom": "^7.1.1"
+  }
+}
