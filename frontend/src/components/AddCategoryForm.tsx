@@ -1,129 +1,222 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import { categoryIcons } from '../utils/icons';
-import IconUpload from './IconUpload';
-import { storage } from '../utils/storage';
+import { 
+  TextField, 
+  Button, 
+  Box,
+  Stack,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  ListSubheader,
+  IconButton,
+  FormControlLabel,
+  Checkbox
+} from '@mui/material';
+import * as Icons from '@mui/icons-material';
+import { Category } from '../types/dictionary';
 
 interface AddCategoryFormProps {
-  onAddCategory: (category: { 
-    name: string; 
-    description: string; 
+  categories: Category[];
+  selectedCategory?: string;
+  onAddCategory: (category: {
+    name: string;
+    description: string;
     icon: string;
+    parentId?: string;
     customIcon?: string;
   }) => void;
 }
 
-export default function AddCategoryForm({ onAddCategory }: AddCategoryFormProps) {
-  const [isOpen, setIsOpen] = useState(false);
+// Icon groups for better organization
+const iconGroups = {
+  'Common Actions': ['Add', 'Edit', 'Delete', 'Search', 'Settings'],
+  'Content': ['Folder', 'Category', 'Label', 'Bookmark', 'Star', 'Flag'],
+  'Communication': ['Mail', 'Message', 'Chat', 'Forum', 'Announcement'],
+  'Education': ['School', 'Book', 'MenuBook', 'LocalLibrary'],
+  'Business': ['Business', 'Work', 'AccountBalance', 'AttachMoney'],
+  'Technology': ['Computer', 'Laptop', 'Code', 'Cloud', 'Storage'],
+  'People': ['Person', 'Group', 'People', 'Public'],
+  'Schedule': ['Schedule', 'Today', 'Event', 'CalendarToday'],
+  'Location': ['Place', 'LocationOn', 'Map', 'Navigation'],
+  'Media': ['Image', 'Movie', 'MusicNote', 'Headphones'],
+  'Health': ['LocalHospital', 'Favorite', 'FitnessCenter'],
+  'Nature': ['Park', 'Nature', 'WbSunny'],
+  'Shopping': ['ShoppingCart', 'Store', 'LocalMall'],
+  'Home': ['Home', 'House', 'Build'],
+  'Sports': ['Sports', 'SportsBasketball', 'SportsFootball'],
+  'Transportation': ['DirectionsCar', 'LocalTaxi', 'Train'],
+  'Security': ['Security', 'Lock', 'VpnKey'],
+  'Misc': ['Lightbulb', 'EmojiObjects', 'Palette', 'Brush']
+};
+
+export default function AddCategoryForm({ categories, selectedCategory, onAddCategory }: AddCategoryFormProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [icon, setIcon] = useState(Object.keys(categoryIcons)[0]);
-  const [customIcon, setCustomIcon] = useState<string | null>(null);
+  const [icon, setIcon] = useState(Object.values(iconGroups)[0][0]);
+  const [customIcon, setCustomIcon] = useState('');
+  const [useSelectedAsParent, setUseSelectedAsParent] = useState(false);
+  const [parentId, setParentId] = useState<string | undefined>(undefined);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && description) {
-      onAddCategory({ 
-        name, 
-        description, 
-        icon,
-        customIcon: customIcon || undefined
-      });
-      setName('');
-      setDescription('');
-      setIcon(Object.keys(categoryIcons)[0]);
-      setCustomIcon(null);
-      setIsOpen(false);
-    }
+    if (!name || !icon) return;
+
+    onAddCategory({
+      name,
+      description,
+      icon,
+      parentId: useSelectedAsParent ? selectedCategory : parentId,
+      customIcon: customIcon || undefined,
+    });
+
+    // Reset form
+    setName('');
+    setDescription('');
+    setIcon(Object.values(iconGroups)[0][0]);
+    setCustomIcon('');
+    setUseSelectedAsParent(false);
+    setParentId(undefined);
   };
 
-  const handleIconUpload = async (file: File | null) => {
-    if (file) {
-      const categoryId = `temp-${Date.now()}`;
-      const iconUrl = await storage.saveIcon(categoryId, file);
-      setCustomIcon(iconUrl);
-    } else {
-      setCustomIcon(null);
+  const renderIcon = (iconName: string) => {
+    const Icon = (Icons as any)[iconName];
+    return Icon ? <Icon /> : null;
+  };
+
+  // Build category hierarchy for display
+  const getCategoryPath = (category: Category): string => {
+    const path: string[] = [category.name];
+    let current = category;
+    while (current.parentId) {
+      const parent = categories.find(c => c.id === current.parentId);
+      if (parent) {
+        path.unshift(parent.name);
+        current = parent;
+      } else {
+        break;
+      }
     }
+    return path.join(' > ');
   };
 
   return (
-    <div className="mb-8">
-      {!isOpen ? (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg 
-                   hover:bg-green-600 transition-colors"
-        >
-          <Plus className="h-5 w-5" />
-          <span>Add New Category</span>
-        </button>
-      ) : (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Category Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm 
-                         focus:border-green-500 focus:ring-green-500"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm 
-                         focus:border-green-500 focus:ring-green-500"
-                rows={2}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Custom Icon</label>
-              <IconUpload
-                currentIcon={customIcon}
-                onIconChange={handleIconUpload}
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Or choose from predefined icons:
-              </p>
-              <select
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm 
-                         focus:border-green-500 focus:ring-green-500"
-                disabled={!!customIcon}
+    <Box component="form" onSubmit={handleSubmit}>
+      <Stack spacing={2}>
+        <TextField
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          fullWidth
+          autoFocus
+        />
+
+        <TextField
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          fullWidth
+          multiline
+          rows={2}
+        />
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={useSelectedAsParent}
+              onChange={(e) => {
+                setUseSelectedAsParent(e.target.checked);
+                if (e.target.checked) {
+                  setParentId(undefined);
+                }
+              }}
+              disabled={!selectedCategory}
+            />
+          }
+          label="Use selected category as parent"
+        />
+
+        <FormControl fullWidth disabled={useSelectedAsParent}>
+          <InputLabel>Parent Category (optional)</InputLabel>
+          <Select
+            value={parentId || ''}
+            onChange={(e) => setParentId(e.target.value || undefined)}
+            label="Parent Category (optional)"
+          >
+            <MenuItem value="">
+              <em>None</em>
+            </MenuItem>
+            {categories.map((category) => (
+              <MenuItem key={category.id} value={category.id}>
+                {getCategoryPath(category)}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth required>
+          <InputLabel>Icon</InputLabel>
+          <Select
+            value={icon}
+            onChange={(e) => setIcon(e.target.value)}
+            label="Icon"
+            renderValue={(selected) => (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {renderIcon(selected)}
+                {selected}
+              </Box>
+            )}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  maxHeight: 400
+                }
+              }
+            }}
+          >
+            {Object.entries(iconGroups).map(([groupName, icons]) => [
+              <ListSubheader 
+                key={groupName}
+                sx={{ 
+                  bgcolor: 'background.paper',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 1
+                }}
               >
-                {Object.keys(categoryIcons).map((iconName) => (
-                  <option key={iconName} value={iconName}>
+                {groupName}
+              </ListSubheader>,
+              ...icons.map(iconName => (
+                <MenuItem key={iconName} value={iconName}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {renderIcon(iconName)}
                     {iconName}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex space-x-3">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
-              >
-                Add Category
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </form>
-      )}
-    </div>
+                  </Box>
+                </MenuItem>
+              ))
+            ])}
+          </Select>
+        </FormControl>
+
+        <TextField
+          label="Custom Icon URL (optional)"
+          value={customIcon}
+          onChange={(e) => setCustomIcon(e.target.value)}
+          fullWidth
+          helperText="Enter a URL to use a custom icon instead of the selected icon"
+        />
+
+        <Button 
+          type="submit" 
+          variant="contained" 
+          color="primary"
+          disabled={!name || !icon}
+          fullWidth
+        >
+          Add Category
+        </Button>
+      </Stack>
+    </Box>
   );
 }

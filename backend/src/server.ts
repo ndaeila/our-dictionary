@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { config } from 'dotenv';
 import { dbService } from './db/database';
-import { Category, Definition } from './types/dictionary';
+import { Category, Definition, Word } from './types/dictionary';
 
 // Load environment variables
 config();
@@ -114,6 +114,71 @@ app.delete('/api/icons/:categoryId', (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete icon' });
+  }
+});
+
+// Delete category
+app.delete('/api/categories/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    dbService.deleteCategory(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
+// Get words with pagination
+app.get('/api/words', async (req, res) => {
+  try {
+    // Default to page 1 if page is not a positive number
+    let page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.max(1, parseInt(req.query.pageSize as string) || 10);
+    const categoryId = req.query.categoryId as string;
+    const searchTerm = req.query.searchTerm as string;
+
+    const result = await dbService.getWords({ page, pageSize, categoryId, searchTerm });
+    
+    // If page is greater than total pages, return last page
+    const totalPages = Math.ceil(result.total / pageSize);
+    if (page > totalPages && totalPages > 0) {
+      page = totalPages;
+      const newResult = await dbService.getWords({ page, pageSize, categoryId, searchTerm });
+      res.json(newResult);
+      return;
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error getting words:', error);
+    res.status(500).json({ error: 'Failed to get words' });
+  }
+});
+
+// Add word
+app.post('/api/words', async (req: Request, res: Response) => {
+  try {
+    const word: Word = {
+      ...req.body,
+      createdAt: new Date(req.body.createdAt)
+    };
+    await dbService.addWord(word);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding word:', error);
+    res.status(500).json({ error: 'Failed to add word' });
+  }
+});
+
+// Delete word
+app.delete('/api/words/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await dbService.deleteWord(id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting word:', error);
+    res.status(500).json({ error: 'Failed to delete word' });
   }
 });
 
