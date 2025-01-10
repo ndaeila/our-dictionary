@@ -27,7 +27,7 @@ export const initialWords: Word[] = [
     term: 'Pixelate',
     definition: 'The process of creating art using small digital squares',
     category: 'art',
-    createdAt: new Date('2024-03-10'),
+    createdAt: new Date('2024-03-10'), // TODO: remove this
   },
   {
     id: '2',
