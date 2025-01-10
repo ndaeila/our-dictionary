@@ -1,41 +1,75 @@
-import { Category } from '../types/dictionary';
+import { Category, Word } from '../types/dictionary';
 
-// In-memory storage for demo purposes
-// In a real app, you'd use localStorage, IndexedDB, or a backend service
-let iconStorage: { [key: string]: string } = {};
+const API_URL = 'http://localhost:3002';
 
 export const storage = {
-  saveIcon: (categoryId: string, file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        iconStorage[categoryId] = base64String;
-        resolve(base64String);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  async loadData() {
+    const response = await fetch(`${API_URL}/api/data`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return {
+      categories: data.categories,
+      icons: data.icons || {},
+      words: data.words || []
+    };
+  },
+
+  async saveData(categories: Category[]) {
+    const response = await fetch(`${API_URL}/api/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ categories }),
     });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   },
 
-  getIcon: (categoryId: string): string | null => {
-    return iconStorage[categoryId] || null;
+  async addWord(word: Word) {
+    const response = await fetch(`${API_URL}/api/words`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(word),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   },
 
-  removeIcon: (categoryId: string): void => {
-    delete iconStorage[categoryId];
+  async deleteWord(id: string) {
+    const response = await fetch(`${API_URL}/api/words/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   },
 
-  // Save all data (categories and icons) to localStorage
-  saveData: (categories: Category[]): void => {
-    localStorage.setItem('dictionary_categories', JSON.stringify(categories));
-    localStorage.setItem('dictionary_icons', JSON.stringify(iconStorage));
+  async deleteCategory(id: string) {
+    const response = await fetch(`${API_URL}/api/categories/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   },
 
-  // Load all data from localStorage
-  loadData: (): { categories: Category[]; icons: { [key: string]: string } } => {
-    const categories = JSON.parse(localStorage.getItem('dictionary_categories') || '[]');
-    iconStorage = JSON.parse(localStorage.getItem('dictionary_icons') || '{}');
-    return { categories, icons: iconStorage };
+  async addCategory(category: Category) {
+    const response = await fetch(`${API_URL}/api/data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ categories: [category] }),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
 };

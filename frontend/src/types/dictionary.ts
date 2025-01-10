@@ -1,5 +1,4 @@
 export interface CustomField {
-  id: string;
   name: string;
   value: string;
 }
@@ -10,13 +9,26 @@ export interface Word {
   definition: string;
   category: string;
   createdAt: Date;
-  customFields: CustomField[];
+  customFields?: CustomField[];
 }
 
 export interface Category {
   id: string;
   name: string;
-  description: string;
-  icon: string;
+  description?: string;
+  parentId?: string | null;
+  icon?: string;
   customIcon?: string;
+  path?: string[];
+}
+
+export interface Definition {
+  id: string;
+  categoryId: string;
+  term: string;
+  meaning: string;
+  examples?: string[];
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
