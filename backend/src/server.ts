@@ -72,10 +72,21 @@ app.get('/api/data', (req: Request, res: Response) => {
 app.post('/api/data', (req: Request, res: Response) => {
   try {
     const { categories } = req.body;
-    dbService.saveData(categories);
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ error: 'Categories must be an array' });
+    }
+    
+    // Validate each category has required fields
+    const invalidCategory = categories.find(cat => !cat.id || !cat.name);
+    if (invalidCategory) {
+      return res.status(400).json({ error: 'Each category must have an id and name' });
+    }
+
+    dbService.saveCategories(categories);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to save data' });
+    console.error('Error saving categories:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save data' });
   }
 });
 
@@ -298,7 +309,7 @@ app.post('/api/import', upload.single('file'), async (req: MulterRequest, res: R
           }
 
           // Create words after all categories exist
-          for (const record of records) {
+          const wordPromises = records.map(record => {
             const pathParts = record.path.split('>').map(p => p.trim());
             const categoryId = pathParts.reduce((acc, part) => 
               acc ? `${acc}-${part.toLowerCase()}` : part.toLowerCase(), '');
@@ -311,8 +322,10 @@ app.post('/api/import', upload.single('file'), async (req: MulterRequest, res: R
               createdAt: new Date()
             };
 
-            dbService.addWord(word);
-          }
+            return dbService.addWord(word);
+          });
+
+          await Promise.all(wordPromises);
 
           // Return updated data
           const updatedData = dbService.loadData();
@@ -323,11 +336,15 @@ app.post('/api/import', upload.single('file'), async (req: MulterRequest, res: R
             words
           });
         } catch (error) {
+          console.error('Error processing CSV:', error);
           reject(error);
         }
       });
 
-      parser.on('error', reject);
+      parser.on('error', (error) => {
+        console.error('Error parsing CSV:', error);
+        reject(error);
+      });
 
       // Start parsing
       if (req.file) {
@@ -341,7 +358,7 @@ app.post('/api/import', upload.single('file'), async (req: MulterRequest, res: R
     await processRecords;
   } catch (error) {
     console.error('Error importing CSV:', error);
-    res.status(500).json({ error: 'Failed to import CSV' });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to import CSV' });
   }
 });
 

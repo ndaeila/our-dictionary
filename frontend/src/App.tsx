@@ -62,6 +62,7 @@ function App() {
   const { wordId, categoryId, page, updateUrl } = useUrlState();
   const [pageSize] = React.useState(10);
   const [totalWords, setTotalWords] = React.useState(0);
+  const [categoriesModified, setCategoriesModified] = React.useState(false);
 
   // Get the currently selected word and its category
   const selectedWord = wordId ? words.find(w => w.id === wordId) || null : null;
@@ -73,7 +74,8 @@ function App() {
       try {
         // Load categories
         const categoriesData = await storage.loadData();
-        setCategories(categoriesData.categories);
+        setCategories(categoriesData.categories || []);
+        setCategoriesModified(false);
         
         // Load paginated words
         const response = await fetch(`http://localhost:3002/api/words?page=${page}&pageSize=${pageSize}&categoryId=${categoryId || ''}&searchTerm=${searchTerm || ''}`);
@@ -95,19 +97,20 @@ function App() {
     loadData();
   }, [page, pageSize, categoryId, searchTerm]);
 
-  // Save data whenever it changes
+  // Save data only when categories are modified
   React.useEffect(() => {
     const saveData = async () => {
+      if (!categoriesModified || loading || categories.length === 0) return;
+      
       try {
         await storage.saveData(categories);
+        setCategoriesModified(false);
       } catch (error) {
         console.error('Failed to save data:', error);
       }
     };
-    if (!loading) {
-      saveData();
-    }
-  }, [categories, loading]);
+    saveData();
+  }, [categories, categoriesModified, loading]);
 
   // Handle URL-based navigation
   React.useEffect(() => {

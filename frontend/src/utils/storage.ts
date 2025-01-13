@@ -117,5 +117,29 @@ export const storage = {
     }
 
     return response.json();
+  },
+
+  async addCategory(category: Category): Promise<void> {
+    const response = await fetch(`${API_URL}/categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(category),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    const response = await fetch(`${API_URL}/categories/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
 }; 

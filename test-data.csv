@@ -1,0 +1,31 @@
+term,definition,path
+Bull Market,A market characterized by rising prices,Finance > Market Trends > Upward
+Bear Market,A market characterized by falling prices,Finance > Market Trends > Downward
+Volatility,A measure of price fluctuations,Finance > Market Analysis > Risk Metrics
+ROI,Return on Investment - measures profitability,Finance > Performance Metrics
+P/E Ratio,Price to Earnings Ratio - valuation metric,Finance > Valuation > Ratios
+Dividend Yield,Annual dividend payment relative to stock price,Finance > Income > Dividends
+Market Cap,Total value of a company's shares,Finance > Valuation > Size
+EBITDA,Earnings Before Interest Taxes Depreciation and Amortization,Finance > Performance Metrics > Earnings
+Beta,Measure of stock volatility compared to market,Finance > Risk Analysis
+Alpha,Excess return compared to benchmark,Finance > Performance Metrics > Returns
+Short Selling,Selling borrowed shares to profit from price decline,Finance > Trading > Strategies
+Day Trading,Buying and selling securities within same day,Finance > Trading > Timeframes
+Options Contract,Right to buy/sell asset at specific price and date,Finance > Derivatives > Options
+Futures Contract,Agreement to buy/sell asset at future date,Finance > Derivatives > Futures
+Hedge Fund,Investment fund using complex strategies,Finance > Investment Vehicles
+Mutual Fund,Pooled investment managed professionally,Finance > Investment Vehicles > Traditional
+ETF,Exchange Traded Fund tracking index or assets,Finance > Investment Vehicles > Exchange Traded
+Bond Yield,Return from bond investment,Finance > Fixed Income > Returns
+Credit Rating,Assessment of borrower creditworthiness,Finance > Fixed Income > Risk
+Leverage,Using borrowed money to increase exposure,Finance > Risk Management
+Margin Trading,Trading with borrowed money from broker,Finance > Trading > Leverage
+Portfolio,Collection of investments held by investor,Finance > Investment Management
+Asset Allocation,Distribution of investments across asset classes,Finance > Investment Management > Strategy
+Diversification,Spreading investments to reduce risk,Finance > Risk Management > Strategy
+Technical Analysis,Study of price patterns and trends,Finance > Analysis Methods
+Fundamental Analysis,Study of company financial health,Finance > Analysis Methods > Fundamentals
+Fibonacci Retracement,Technical analysis using Fibonacci numbers,Finance > Technical Analysis > Tools
+Moving Average,Average price over specific time period,Finance > Technical Analysis > Indicators
+RSI,Relative Strength Index momentum indicator,Finance > Technical Analysis > Momentum
+MACD,Moving Average Convergence Divergence indicator,Finance > Technical Analysis > Trends 
