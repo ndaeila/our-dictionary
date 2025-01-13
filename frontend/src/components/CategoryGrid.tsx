@@ -63,7 +63,15 @@ function CategoryCarousel({
   const levelCategories = categories.filter(cat => cat.parentId === parentId);
   const hasChildren = levelCategories.some(cat => categories.some(c => c.parentId === cat.id));
   
-  if (levelCategories.length === 0) {
+  // Move selected category to front if it exists in this level
+  const sortedCategories = selectedCategory 
+    ? [
+        ...levelCategories.filter(cat => cat.id === selectedCategory),
+        ...levelCategories.filter(cat => cat.id !== selectedCategory)
+      ]
+    : levelCategories;
+  
+  if (sortedCategories.length === 0) {
     return null;
   }
 
@@ -168,7 +176,7 @@ function CategoryCarousel({
         >
           {shouldBeExpanded ? (
             // Expanded view with icons and descriptions
-            levelCategories.map((category) => (
+            sortedCategories.map((category) => (
               <Paper
                 key={category.id}
                 elevation={0}
@@ -234,7 +242,7 @@ function CategoryCarousel({
                 gap: 0.5
               }}
             >
-              {levelCategories.map((category) => (
+              {sortedCategories.map((category) => (
                 <Chip
                   key={category.id}
                   label={category.name}

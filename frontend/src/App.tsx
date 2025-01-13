@@ -284,6 +284,7 @@ function App() {
                   searchTerm={searchTerm} 
                   onSearch={setSearchTerm}
                   words={words}
+                  categories={categories}
                 />
               </Box>
 
@@ -313,15 +314,15 @@ function App() {
                 </Paper>
               )}
 
-              <CategoryGrid
-                categories={categories}
-                onSelectCategory={handleCategorySelect}
-                selectedCategory={categoryId}
+        <CategoryGrid
+          categories={categories}
+          onSelectCategory={handleCategorySelect}
+          selectedCategory={categoryId}
                 isSelectMode={isSelectMode}
                 selectedItems={selectedItems}
-              />
+        />
 
-              <WordList 
+        <WordList 
                 words={words}
                 onWordClick={handleWordClick}
                 isSelectMode={isSelectMode}
@@ -340,9 +341,10 @@ function App() {
           element={
             <SearchResults
               words={words}
-              onWordClick={handleWordClick}
+          onWordClick={handleWordClick}
               isSelectMode={isSelectMode}
               selectedItems={selectedItems}
+              categories={categories}
             />
           }
         />
