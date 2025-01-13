@@ -173,4 +173,100 @@ describe('API Endpoints', () => {
         .expect(500);
     });
   });
+
+  describe('POST /api/import', () => {
+    it('should import CSV data and create categories and words', async () => {
+      const csvContent = `term,definition,path
+Orange,A citrus fruit with a tough bright reddish-yellow rind.,Food > Fruits > Citrus
+Lemon,A yellow citrus fruit with a sour taste.,Food > Fruits > Citrus
+Apple,A round fruit with red or green skin and a whitish interior.,Food > Fruits > Core`;
+
+      const buffer = Buffer.from(csvContent);
+      const response = await request(app)
+        .post('/api/import')
+        .attach('file', buffer, {
+          filename: 'test.csv',
+          contentType: 'text/csv'
+        })
+        .expect(200);
+
+      // Check response structure
+      expect(response.body).toHaveProperty('categories');
+      expect(response.body).toHaveProperty('words');
+      
+      // Verify categories were created with proper hierarchy
+      const categories = response.body.categories;
+      const expectedCategories = ['Food', 'Fruits', 'Citrus', 'Core'];
+      expectedCategories.forEach(name => {
+        expect(categories.some(c => c.name === name)).toBe(true);
+      });
+      
+      // Check category hierarchy
+      const food = categories.find((c: any) => c.name === 'Food');
+      const fruits = categories.find((c: any) => c.name === 'Fruits');
+      const citrus = categories.find((c: any) => c.name === 'Citrus');
+      const core = categories.find((c: any) => c.name === 'Core');
+      
+      expect(food).toBeTruthy();
+      expect(fruits).toBeTruthy();
+      expect(citrus).toBeTruthy();
+      expect(core).toBeTruthy();
+      
+      expect(fruits.parentId).toBe(food.id);
+      expect(citrus.parentId).toBe(fruits.id);
+      expect(core.parentId).toBe(fruits.id);
+
+      // Verify words were created
+      const words = response.body.words.words;
+      expect(words).toHaveLength(3);
+      
+      const terms = words.map((w: any) => w.term);
+      expect(terms).toContain('Orange');
+      expect(terms).toContain('Lemon');
+      expect(terms).toContain('Apple');
+
+      // Check word-category relationships
+      const orange = words.find((w: any) => w.term === 'Orange');
+      const lemon = words.find((w: any) => w.term === 'Lemon');
+      const apple = words.find((w: any) => w.term === 'Apple');
+
+      expect(orange.category).toBe(citrus.id);
+      expect(lemon.category).toBe(citrus.id);
+      expect(apple.category).toBe(core.id);
+    });
+
+    it('should handle malformed CSV data', async () => {
+      const csvContent = `term,definition
+Orange,A citrus fruit,Food > Fruits > Citrus`; // Missing path column
+
+      const buffer = Buffer.from(csvContent);
+      await request(app)
+        .post('/api/import')
+        .attach('file', buffer, {
+          filename: 'test.csv',
+          contentType: 'text/csv'
+        })
+        .expect(500);
+    });
+
+    it('should handle missing file', async () => {
+      await request(app)
+        .post('/api/import')
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.error).toBe('No file uploaded');
+        });
+    });
+
+    it('should handle non-CSV file', async () => {
+      const buffer = Buffer.from('not a csv file');
+      await request(app)
+        .post('/api/import')
+        .attach('file', buffer, {
+          filename: 'test.txt',
+          contentType: 'text/plain'
+        })
+        .expect(500);
+    });
+  });
 }); 

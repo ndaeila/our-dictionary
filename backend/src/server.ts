@@ -1,11 +1,13 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { config } from 'dotenv';
+import dotenv from 'dotenv';
+import multer from 'multer';
+import { parse } from 'csv-parse';
+import { Category, Word, Definition } from './types/dictionary';
 import { dbService } from './db/database';
-import { Category, Definition, Word } from './types/dictionary';
 
 // Load environment variables
-config();
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3002;
@@ -19,6 +21,42 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '50mb' }));
+
+// Configure multer for file upload
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Define multer request type
+interface MulterRequest extends Request {
+  file?: {
+    fieldname: string;
+    originalname: string;
+    encoding: string;
+    mimetype: string;
+    buffer: Buffer;
+    size: number;
+  };
+}
+
+// Helper function to create categories from path
+const createCategoryPath = (path: string): Category[] => {
+  const parts = path.split('>').map(p => p.trim());
+  const categories: Category[] = [];
+  
+  for (let i = 0; i < parts.length; i++) {
+    const name = parts[i];
+    const id = parts.slice(0, i + 1).join('-').toLowerCase().replace(/\s+/g, '-');
+    const parentId = i > 0 ? parts.slice(0, i).join('-').toLowerCase().replace(/\s+/g, '-') : null;
+    
+    categories.push({
+      id,
+      name,
+      description: '',
+      parentId
+    });
+  }
+  
+  return categories;
+};
 
 // Get all categories and icons
 app.get('/api/data', (req: Request, res: Response) => {
@@ -117,6 +155,18 @@ app.delete('/api/icons/:categoryId', (req: Request, res: Response) => {
   }
 });
 
+// Add category
+app.post('/api/categories', (req: Request, res: Response) => {
+  try {
+    const category: Category = req.body;
+    dbService.addCategory(category);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding category:', error);
+    res.status(500).json({ error: 'Failed to add category' });
+  }
+});
+
 // Delete category
 app.delete('/api/categories/:id', (req: Request, res: Response) => {
   try {
@@ -124,6 +174,7 @@ app.delete('/api/categories/:id', (req: Request, res: Response) => {
     dbService.deleteCategory(id);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
   }
 });
@@ -179,6 +230,118 @@ app.delete('/api/words/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error deleting word:', error);
     res.status(500).json({ error: 'Failed to delete word' });
+  }
+});
+
+// Import CSV endpoint
+app.post('/api/import', upload.single('file'), async (req: MulterRequest, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  // Validate file type
+  if (req.file.mimetype !== 'text/csv') {
+    return res.status(500).json({ error: 'Invalid file type. Only CSV files are allowed.' });
+  }
+
+  try {
+    const processRecords = new Promise<void>((resolve, reject) => {
+      const parser = parse({
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+
+      const records: { term: string; definition: string; path: string }[] = [];
+
+      parser.on('readable', () => {
+        let record;
+        while ((record = parser.read())) {
+          // Validate required fields
+          if (!record.term || !record.definition || !record.path) {
+            throw new Error('Missing required fields: term, definition, and path are required');
+          }
+          records.push(record);
+        }
+      });
+
+      parser.on('end', async () => {
+        try {
+          // First, collect all unique categories
+          const newCategories = new Map<string, Category>();
+          for (const record of records) {
+            const pathParts = record.path.split('>').map(p => p.trim());
+            let parentId: string | undefined = undefined;
+            let currentPath = '';
+
+            for (const part of pathParts) {
+              currentPath = currentPath ? `${currentPath}-${part.toLowerCase()}` : part.toLowerCase();
+              if (!newCategories.has(currentPath)) {
+                newCategories.set(currentPath, {
+                  id: currentPath,
+                  name: part,
+                  description: '',
+                  icon: undefined,
+                  parentId
+                });
+              }
+              parentId = currentPath;
+            }
+          }
+
+          // Create categories in order (parents first)
+          const sortedCategories = Array.from(newCategories.values())
+            .sort((a, b) => (a.parentId ? 1 : -1));
+
+          for (const category of sortedCategories) {
+            dbService.addCategory(category);
+          }
+
+          // Create words after all categories exist
+          for (const record of records) {
+            const pathParts = record.path.split('>').map(p => p.trim());
+            const categoryId = pathParts.reduce((acc, part) => 
+              acc ? `${acc}-${part.toLowerCase()}` : part.toLowerCase(), '');
+
+            const word: Word = {
+              id: `${record.term.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
+              term: record.term,
+              definition: record.definition,
+              category: categoryId,
+              createdAt: new Date()
+            };
+
+            dbService.addWord(word);
+          }
+
+          // Return updated data
+          const updatedData = dbService.loadData();
+          const words = await dbService.getWords({ page: 1, pageSize: 1000 });
+          resolve();
+          res.json({
+            categories: updatedData.categories,
+            words
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      parser.on('error', reject);
+
+      // Start parsing
+      if (req.file) {
+        parser.write(req.file.buffer);
+        parser.end();
+      } else {
+        reject(new Error('No file uploaded'));
+      }
+    });
+
+    await processRecords;
+  } catch (error) {
+    console.error('Error importing CSV:', error);
+    res.status(500).json({ error: 'Failed to import CSV' });
   }
 });
 

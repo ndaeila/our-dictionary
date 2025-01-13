@@ -23,7 +23,8 @@ describe('Storage Service', () => {
     it('should load data successfully', async () => {
       const mockResponse = {
         categories: [mockCategory],
-        icons: { [mockCategory.id]: mockIcon }
+        icons: { [mockCategory.id]: mockIcon },
+        words: []
       };
 
       (global.fetch as jest.Mock).mockImplementationOnce(() =>
@@ -46,7 +47,7 @@ describe('Storage Service', () => {
       );
 
       const result = await storage.loadData();
-      expect(result).toEqual({ categories: [], icons: {}, definitions: [] });
+      expect(result).toEqual({ categories: [], icons: {}, words: [] });
     });
 
     it('should save data successfully', async () => {
@@ -67,6 +68,35 @@ describe('Storage Service', () => {
           body: JSON.stringify({ categories: [mockCategory] })
         })
       );
+    });
+
+    it('should delete category successfully', async () => {
+      (global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        })
+      );
+
+      await storage.deleteCategory(mockCategory.id);
+      
+      expect(global.fetch).toHaveBeenCalledWith(
+        `http://localhost:3002/api/categories/${mockCategory.id}`,
+        expect.objectContaining({
+          method: 'DELETE'
+        })
+      );
+    });
+
+    it('should handle delete category failure', async () => {
+      (global.fetch as jest.Mock).mockImplementationOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 404
+        })
+      );
+
+      await expect(storage.deleteCategory(mockCategory.id)).rejects.toThrow('HTTP error! status: 404');
     });
   });
 

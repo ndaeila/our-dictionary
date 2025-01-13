@@ -17,7 +17,15 @@ import {
   SpeedDialIcon,
   SpeedDialAction,
   Paper,
-  Divider
+  Divider,
+  DialogContentText,
+  DialogActions,
+  Input,
+  Table,
+  TableHead,
+  TableBody,
+  TableCell,
+  TableRow
 } from '@mui/material';
 import { 
   Delete as DeleteIcon, 
@@ -26,7 +34,8 @@ import {
   Category as CategoryIcon,
   TextFields as WordIcon,
   Close as CloseIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Upload as UploadIcon
 } from '@mui/icons-material';
 import SearchBar from './components/SearchBar';
 import CategoryGrid from './components/CategoryGrid';
@@ -47,6 +56,9 @@ function App() {
   const [isSelectMode, setIsSelectMode] = React.useState(false);
   const [selectedItems, setSelectedItems] = React.useState<string[]>([]);
   const [addDialogOpen, setAddDialogOpen] = React.useState<'word' | 'category' | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = React.useState(false);
+  const [dragActive, setDragActive] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { wordId, categoryId, page, updateUrl } = useUrlState();
   const [pageSize] = React.useState(10);
   const [totalWords, setTotalWords] = React.useState(0);
@@ -87,7 +99,7 @@ function App() {
   React.useEffect(() => {
     const saveData = async () => {
       try {
-        await storage.saveData(categories, words);
+        await storage.saveData(categories);
       } catch (error) {
         console.error('Failed to save data:', error);
       }
@@ -95,27 +107,26 @@ function App() {
     if (!loading) {
       saveData();
     }
-  }, [categories, words, loading]);
+  }, [categories, loading]);
 
   // Handle URL-based navigation
   React.useEffect(() => {
     // Removed the automatic category update
   }, [wordId, categoryId, words, updateUrl]);
 
-  const handleCategorySelect = (selectedCategoryId: string) => {
+  const handleCategorySelect = (id: string) => {
     if (isSelectMode) {
-      setSelectedItems((prev: string[]) => 
-        prev.includes(selectedCategoryId) 
-          ? prev.filter((id: string) => id !== selectedCategoryId)
-          : [...prev, selectedCategoryId]
-      );
+      const newSelectedItems = selectedItems.includes(id)
+        ? selectedItems.filter(item => item !== id)
+        : [...selectedItems, id];
+      setSelectedItems(newSelectedItems);
+      return;
+    }
+
+    if (id === categoryId) {
+      updateUrl(undefined, '', 1);
     } else {
-      // If clicking the currently selected category, deselect it
-      if (categoryId === selectedCategoryId) {
-        updateUrl(wordId, null, 1);  // Reset to page 1 when deselecting category
-      } else {
-        updateUrl(wordId, selectedCategoryId, 1);  // Reset to page 1 when selecting new category
-      }
+      updateUrl(undefined, id, 1);
     }
   };
 
@@ -137,24 +148,22 @@ function App() {
 
   const handleDeleteSelected = async () => {
     try {
-      // Delete selected words
-      const selectedWords = words.filter((word: Word) => selectedItems.includes(word.id));
-      for (const word of selectedWords) {
-        await storage.deleteWord(word.id);
+      // Delete selected categories and words from the backend
+      for (const id of selectedItems) {
+        const isCategory = categories.some(cat => cat.id === id);
+        if (isCategory) {
+          await storage.deleteCategory(id);
+        } else {
+          await storage.deleteWord(id);
+        }
       }
-
-      // Delete selected categories
-      const selectedCategories = categories.filter((cat: Category) => selectedItems.includes(cat.id));
-      for (const category of selectedCategories) {
-        await storage.deleteCategory(category.id);
-      }
-
-      // Reload data to ensure everything is in sync
-      const data = await storage.loadData();
-      setCategories(data.categories);
-      setWords(data.words);
-
-      // Clear selection and exit select mode
+      
+      // Update local state
+      const updatedCategories = categories.filter(cat => !selectedItems.includes(cat.id));
+      const updatedWords = words.filter(word => !selectedItems.includes(word.id));
+      
+      setCategories(updatedCategories);
+      setWords(updatedWords);
       setSelectedItems([]);
       setIsSelectMode(false);
     } catch (error) {
@@ -214,6 +223,36 @@ function App() {
     updateUrl(undefined, categoryId);
   };
 
+  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files?.[0]) return;
+    
+    const formData = new FormData();
+    formData.append('file', event.target.files[0]);
+
+    try {
+      const response = await fetch('http://localhost:3002/api/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCategories(data.categories);
+      setWords(data.words.words.map((word: any) => ({
+        ...word,
+        createdAt: new Date(word.createdAt)
+      })));
+      setTotalWords(data.words.total);
+      setImportDialogOpen(false);
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      // TODO: Show error message to user
+    }
+  };
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -248,29 +287,17 @@ function App() {
                 />
               </Box>
 
-              <Paper 
-                elevation={0} 
-                sx={{ 
-                  mb: 4, 
-                  bgcolor: 'background.paper',
-                  borderRadius: 1
-                }}
-              >
-                <Toolbar variant="dense" sx={{ minHeight: 48 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
-                    <Button
-                      variant={isSelectMode ? "contained" : "outlined"}
-                      color={isSelectMode ? "primary" : "inherit"}
-                      onClick={() => {
-                        setIsSelectMode(!isSelectMode);
-                        setSelectedItems([]);
-                      }}
-                      startIcon={<EditIcon />}
-                      size="small"
-                    >
-                      Select Mode
-                    </Button>
-                    {isSelectMode && (
+              {isSelectMode && (
+                <Paper 
+                  elevation={0} 
+                  sx={{ 
+                    mb: 4, 
+                    bgcolor: 'background.paper',
+                    borderRadius: 1
+                  }}
+                >
+                  <Toolbar variant="dense" sx={{ minHeight: 48 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
                       <Button
                         variant="contained"
                         color="error"
@@ -281,20 +308,10 @@ function App() {
                       >
                         Delete Selected ({selectedItems.length})
                       </Button>
-                    )}
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      variant="text"
-                      color="inherit"
-                      startIcon={<FilterIcon />}
-                      size="small"
-                    >
-                      Filter
-                    </Button>
-                  </Box>
-                </Toolbar>
-              </Paper>
+                    </Box>
+                  </Toolbar>
+                </Paper>
+              )}
 
               <CategoryGrid
                 categories={categories}
@@ -331,11 +348,213 @@ function App() {
         />
       </Routes>
 
+      <Dialog 
+        open={importDialogOpen} 
+        onClose={() => setImportDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Import Words from CSV
+          <IconButton
+            aria-label="close"
+            onClick={() => setImportDialogOpen(false)}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            <Typography variant="subtitle1" gutterBottom>
+              Import your words and categories from a CSV file. The file should have the following columns:
+            </Typography>
+            <Box sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1, my: 2, overflowX: 'auto' }}>
+              <Table size="small" sx={{ 
+                '& th, & td': { 
+                  border: '1px solid rgba(224, 224, 224, 1)',
+                  p: 1
+                },
+                '& th': {
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                  fontWeight: 'bold'
+                }
+              }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>term</TableCell>
+                    <TableCell>definition</TableCell>
+                    <TableCell>path</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Orange</TableCell>
+                    <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      A citrus fruit with a tough bright reddish-yellow rind.
+                    </TableCell>
+                    <TableCell>Food {'>'} Fruits {'>'} Citrus</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Lemon</TableCell>
+                    <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      A yellow citrus fruit with a sour taste.
+                    </TableCell>
+                    <TableCell>Food {'>'} Fruits {'>'} Citrus</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Apple</TableCell>
+                    <TableCell sx={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      A round fruit with red or green skin and a whitish interior.
+                    </TableCell>
+                    <TableCell>Food {'>'} Fruits {'>'} Core</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              • The <strong>term</strong> column contains the word to add<br/>
+              • The <strong>definition</strong> column contains the meaning of the word<br/>
+              • The <strong>path</strong> column specifies the category hierarchy using <strong>{'>'}</strong> as a separator
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Non-existent categories will be created automatically. You can use existing or new categories.
+            </Typography>
+          </DialogContentText>
+          
+          <Box
+            sx={{
+              mt: 3,
+              p: 3,
+              border: '2px dashed',
+              borderColor: dragActive ? 'primary.main' : 'grey.300',
+              borderRadius: 2,
+              bgcolor: dragActive ? 'primary.50' : 'background.paper',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              const file = e.dataTransfer.files[0];
+              if (file && file.type === 'text/csv') {
+                const input = document.createElement('input');
+                input.type = 'file';
+                const event = {
+                  target: input,
+                  currentTarget: input,
+                  bubbles: true,
+                  cancelable: true,
+                  type: 'change',
+                  nativeEvent: new Event('change', { bubbles: true })
+                } as React.ChangeEvent<HTMLInputElement>;
+                Object.defineProperty(input, 'files', {
+                  value: [file],
+                  writable: false
+                });
+                handleImportCSV(event);
+              }
+            }}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv"
+              onChange={handleImportCSV}
+              style={{ display: 'none' }}
+            />
+            <UploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              Drag & Drop your CSV file here
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              or click to browse
+            </Typography>
+          </Box>
+
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              You can also paste your CSV content here:
+            </Typography>
+            <textarea
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                marginTop: '8px',
+                padding: '8px',
+                borderRadius: '4px',
+                border: '1px solid #ccc'
+              }}
+              placeholder="Paste your CSV content here..."
+              onChange={(e) => {
+                const content = e.target.value;
+                if (content) {
+                  const blob = new Blob([content], { type: 'text/csv' });
+                  const file = new File([blob], 'pasted.csv', { type: 'text/csv' });
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  const event = {
+                    target: input,
+                    currentTarget: input,
+                    bubbles: true,
+                    cancelable: true,
+                    type: 'change',
+                    nativeEvent: new Event('change', { bubbles: true })
+                  } as React.ChangeEvent<HTMLInputElement>;
+                  Object.defineProperty(input, 'files', {
+                    value: [file],
+                    writable: false
+                  });
+                  handleImportCSV(event);
+                }
+              }}
+            />
+          </Box>
+        </DialogContent>
+      </Dialog>
+
       <SpeedDial
         ariaLabel="Add menu"
-        sx={{ position: 'fixed', bottom: 16, right: 16 }}
+        sx={{ 
+          position: 'fixed', 
+          bottom: 16, 
+          right: 16,
+          '& .MuiFab-primary': {
+            bgcolor: isSelectMode ? 'secondary.main' : 'primary.main',
+            '&:hover': {
+              bgcolor: isSelectMode ? 'secondary.dark' : 'primary.dark'
+            }
+          }
+        }}
         icon={<SpeedDialIcon />}
+        FabProps={{
+          color: "primary"
+        }}
       >
+        <SpeedDialAction
+          icon={<UploadIcon />}
+          tooltipTitle="Import CSV"
+          onClick={() => setImportDialogOpen(true)}
+        />
         <SpeedDialAction
           icon={<WordIcon />}
           tooltipTitle="Add Word"
@@ -345,6 +564,31 @@ function App() {
           icon={<CategoryIcon />}
           tooltipTitle="Add Category"
           onClick={() => setAddDialogOpen('category')}
+        />
+        <SpeedDialAction
+          icon={<EditIcon />}
+          tooltipTitle={isSelectMode ? "Exit Select Mode" : "Enter Select Mode"}
+          onClick={() => {
+            setIsSelectMode(!isSelectMode);
+            setSelectedItems([]);
+          }}
+          sx={{
+            '& .MuiSpeedDialAction-staticTooltipLabel': {
+              backgroundColor: isSelectMode ? 'secondary.main' : 'primary.main',
+              color: 'white',
+              fontWeight: isSelectMode ? 'bold' : 'normal'
+            },
+            '& .MuiSpeedDialAction-fab': {
+              bgcolor: isSelectMode ? 'secondary.main' : 'primary.main',
+              color: 'white',
+              border: isSelectMode ? 2 : 0,
+              borderColor: 'white',
+              '&:hover': {
+                bgcolor: isSelectMode ? 'secondary.dark' : 'primary.dark',
+                borderColor: isSelectMode ? 'white' : 'transparent'
+              }
+            }
+          }}
         />
       </SpeedDial>
 

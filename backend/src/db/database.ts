@@ -199,11 +199,33 @@ export const dbService = {
   deleteCategory: (categoryId: string): void => {
     const db = getDb();
     const deleteTransaction = db.transaction(() => {
-      // First delete all definitions in this category
-      db.prepare('DELETE FROM definitions WHERE categoryId = ?').run(categoryId);
-      // Delete any icons for this category
-      db.prepare('DELETE FROM icons WHERE categoryId = ?').run(categoryId);
-      // Finally delete the category itself
+      // Helper function to recursively get all child category IDs
+      const getAllChildIds = (parentId: string): string[] => {
+        const children = db.prepare('SELECT id FROM categories WHERE parentId = ?').all(parentId) as { id: string }[];
+        return children.reduce<string[]>((acc, child) => {
+          return [...acc, child.id, ...getAllChildIds(child.id)];
+        }, []);
+      };
+
+      // Get all child category IDs
+      const childIds = getAllChildIds(categoryId);
+      const allIds = [categoryId, ...childIds];
+
+      // Delete all words in these categories
+      db.prepare('DELETE FROM words WHERE category IN (' + allIds.map(() => '?').join(',') + ')').run(...allIds);
+      
+      // Delete all definitions in these categories
+      db.prepare('DELETE FROM definitions WHERE categoryId IN (' + allIds.map(() => '?').join(',') + ')').run(...allIds);
+      
+      // Delete any icons for these categories
+      db.prepare('DELETE FROM icons WHERE categoryId IN (' + allIds.map(() => '?').join(',') + ')').run(...allIds);
+      
+      // Delete child categories first (in reverse order to respect foreign key constraints)
+      for (const id of childIds.reverse()) {
+        db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+      }
+      
+      // Finally delete the main category
       db.prepare('DELETE FROM categories WHERE id = ?').run(categoryId);
     });
     
@@ -212,22 +234,36 @@ export const dbService = {
   },
 
   // Add a new word
-  addWord: async (word: Word): Promise<void> => {
-    const db = getDb();
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO words (id, term, definition, category, createdAt)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+  addWord: (word: Word): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const db = getDb();
+      try {
+        // First check if the category exists
+        const categoryExists = db.prepare('SELECT id FROM categories WHERE id = ?').get(word.category);
+        if (!categoryExists) {
+          throw new Error(`Category ${word.category} does not exist`);
+        }
 
-    stmt.run(
-      word.id,
-      word.term,
-      word.definition,
-      word.category,
-      word.createdAt.toISOString()
-    );
-
-    if (!isTest) db.close();
+        // Then check if word exists
+        const existingWord = db.prepare('SELECT id FROM words WHERE id = ?').get(word.id);
+        const stmt = db.prepare(`
+          INSERT OR REPLACE INTO words (id, term, definition, category, createdAt)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        stmt.run(
+          word.id,
+          word.term,
+          word.definition,
+          word.category,
+          word.createdAt.toISOString()
+        );
+        resolve();
+      } catch (error) {
+        reject(error);
+      } finally {
+        if (!isTest) db.close();
+      }
+    });
   },
 
   // Delete a word
@@ -286,5 +322,30 @@ export const dbService = {
       })),
       total: countResult.total
     };
+  },
+
+  // Add a new category
+  addCategory: (category: Category): void => {
+    const db = getDb();
+    try {
+      // First check if category exists
+      const existingCategory = db.prepare('SELECT id FROM categories WHERE id = ?').get(category.id);
+      if (!existingCategory) {
+        // Insert new category
+        const stmt = db.prepare(`
+          INSERT INTO categories (id, name, description, parentId, icon)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        stmt.run(
+          category.id,
+          category.name,
+          category.description || '',
+          category.parentId || null,
+          category.icon || null
+        );
+      }
+    } finally {
+      if (!isTest) db.close();
+    }
   }
 }; 
